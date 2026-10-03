@@ -46,12 +46,24 @@ public class Kvs implements KVService {
                 try {
                     var value = dao.get(key);
                     codeAndText(FOUND_CODE, value).handle(exc);
+                    return;
                 } catch (NoSuchElementException e) {
                     justCode(NOT_FOUND_CODE).handle(exc);
                 }
                 return;
             }
             if (MethodConstants.PUT.equals(exc.getRequestMethod())) {
+                String key;
+                try {
+                    key = parseUri(exc.getRequestURI()).orElseThrow();
+                } catch (NoSuchElementException e) {
+                    justCode(422).handle(exc);
+                    return;
+                }
+                if (key.isEmpty()) {
+                    justCode(INCORRECT_KEY_CODE).handle(exc);
+                    return;
+                }
                 var value = exc.getRequestBody().readAllBytes();
                 dao.upsert(key, value);
                 justCode(PUT_CODE).handle(exc);
