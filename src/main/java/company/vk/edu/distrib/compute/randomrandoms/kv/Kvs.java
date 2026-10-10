@@ -1,5 +1,6 @@
 package company.vk.edu.distrib.compute.randomrandoms.kv;
 
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.kv.KVService;
@@ -17,13 +18,32 @@ import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants
 import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.justCode;
 
 public class Kvs implements KVService {
-    private final FileDao dao = new FileDao(Paths.get(FILE));
+    private final FileDao dao;
 
     private final HttpServer server;
 
     private final HttpHandler status = justCode(200);
 
-    private final HttpHandler entity = exc -> {
+    public static final String ENTITY = "/v0/entity";
+    public static final String STATUS = "/v0/status";
+    public static final String QUERY = "id=";
+    public static final int INCORRECT_KEY_CODE = 400;
+    public static final int NOT_FOUND_CODE = 404;
+    public static final int FOUND_CODE = 200;
+    public static final int DELETED_CODE = 202;
+    public static final int PUT_CODE = 201;
+
+    public Kvs(int port) throws IOException {
+        String file = String.format("/tmp/kv-%d", port);
+        dao = new FileDao(Paths.get(file));
+        server = HttpServer.create();
+        server.setExecutor(Executors.newFixedThreadPool(8));
+        server.bind(new InetSocketAddress("localhost", port), 0);
+        server.createContext(STATUS, status);
+        server.createContext(ENTITY, this::entity);
+    }
+
+    private void entity(HttpExchange exc) throws IOException {
         try {
             String key;
             try {
@@ -60,25 +80,6 @@ public class Kvs implements KVService {
         } catch (Exception e) {
             justCode(500).handle(exc);
         }
-    };
-
-    public static final String ENTITY = "/v0/entity";
-    public static final String STATUS = "/v0/status";
-    public static final String QUERY = "id=";
-    public static final int INCORRECT_KEY_CODE = 400;
-    public static final int NOT_FOUND_CODE = 404;
-    public static final int FOUND_CODE = 200;
-    public static final int DELETED_CODE = 202;
-    public static final int PUT_CODE = 201;
-
-    private static final String FILE = "/tmp/kv";
-
-    public Kvs(int port) throws IOException {
-        server = HttpServer.create();
-        server.setExecutor(Executors.newFixedThreadPool(8));
-        server.bind(new InetSocketAddress("localhost", port), 0);
-        server.createContext(STATUS, status);
-        server.createContext(ENTITY, entity);
     }
 
     private Optional<String> parseUri(URI uri) {
