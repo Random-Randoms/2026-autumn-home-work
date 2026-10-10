@@ -63,6 +63,7 @@ public class Service implements UrlShortenerService {
             exc.getResponseBody().write(shortLink.getBytes());
             exc.getResponseBody().close();
             exc.close();
+            return;
         }
         var id = path.substring("/v0/links/".length());
         if (!validId(id)) {
@@ -162,7 +163,7 @@ public class Service implements UrlShortenerService {
 
     @Override
     public void stop() {
-        server.stop(0);
+        server.stop(1);
     }
 
     private String generateId() {
@@ -185,14 +186,14 @@ public class Service implements UrlShortenerService {
         return ans.toString();
     }
 
-    private Boolean validId(String id) {
+    private boolean validId(String id) {
         return id.length() == 10 && id.chars().allMatch(c -> (c >= '0' && c <= '9')
                 || (c >= 'a' && c <= 'z')
                 || (c >= 'A' && c <= 'Z')
         );
     }
 
-    private Boolean validLink(String link) {
+    private boolean validLink(String link) {
         try {
             new URI(link).toURL();
             return true;
@@ -224,12 +225,17 @@ public class Service implements UrlShortenerService {
     }
 
     private boolean checkAuth(HttpExchange exc) throws IOException {
-        var hdr = exc.getRequestHeaders().get("Authorization").getFirst();
+        var authHeaders = exc.getRequestHeaders().get("Authorization");
+        if (authHeaders == null) {
+            justCode(401).handle(exc);
+            return false;
+        }
+        var hdr = authHeaders.getFirst();
         Creds creds;
         try {
             creds = parseAuthHeader(hdr).orElseThrow();
         } catch (NoSuchElementException e) {
-            justCode(422).handle(exc);
+            justCode(401).handle(exc);
             return false;
         }
         boolean authOk;
