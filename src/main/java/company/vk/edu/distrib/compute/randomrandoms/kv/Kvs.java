@@ -58,6 +58,7 @@ public class Kvs implements KVService {
     }
 
     private static final String FILE = "/tmp/kv";
+
     public Kvs(int port) throws IOException {
         String file = String.format("/tmp/kv-%d", port);
         dao = new FileDao(Paths.get(file));
@@ -93,13 +94,6 @@ public class Kvs implements KVService {
                 return;
             }
             if (MethodConstants.GET.equals(exc.getRequestMethod())) {
-                try {
-                    var value = dao.get(key);
-                    codeAndText(FOUND_CODE, value).handle(exc);
-                    return;
-                } catch (NoSuchElementException e) {
-                    justCode(NOT_FOUND_CODE).handle(exc);
-                }
                 get(req, exc);
                 return;
             }
@@ -112,7 +106,6 @@ public class Kvs implements KVService {
         } catch (Exception e) {
             justCode(500).handle(exc);
         }
-    }
     }
 
     private boolean reqValid(Req req) {
@@ -175,13 +168,6 @@ public class Kvs implements KVService {
         }
     }
 
-    public Kvs(int port) throws IOException {
-        server = HttpServer.create();
-        server.setExecutor(executor);
-        server.bind(new InetSocketAddress("localhost", port), 0);
-        server.createContext(STATUS, status);
-        server.createContext(ENTITY, this::entity);
-        dao = new FileDao(Paths.get(String.format("%s-%d", FILE, port)));
     private void put(Req req, byte[] value, HttpExchange exc) throws IOException {
         dao.upsert(req.key, value);
         int oks = 1;
