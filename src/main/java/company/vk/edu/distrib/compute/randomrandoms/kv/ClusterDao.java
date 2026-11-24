@@ -33,9 +33,9 @@ public class ClusterDao implements Dao<String> {
             throw new IOException(e);
         }
         switch (response.statusCode()) {
-            case Kvs.INCORRECT_KEY_CODE -> throw new IllegalArgumentException();
-            case Kvs.NOT_FOUND_CODE -> throw new NoSuchElementException();
-            case Kvs.FOUND_CODE -> {
+            case ReplKvs.INCORRECT_KEY_CODE -> throw new IllegalArgumentException();
+            case ReplKvs.NOT_FOUND_CODE -> throw new NoSuchElementException();
+            case ReplKvs.FOUND_CODE -> {
                 return response.body();
             }
             default -> throw new UnexpectedException("unexpected code");
@@ -60,8 +60,8 @@ public class ClusterDao implements Dao<String> {
             throw new IOException(e);
         }
         switch (response.statusCode()) {
-            case Kvs.INCORRECT_KEY_CODE -> throw new IllegalArgumentException();
-            case Kvs.PUT_CODE -> {
+            case ReplKvs.INCORRECT_KEY_CODE -> throw new IllegalArgumentException();
+            case ReplKvs.PUT_CODE -> {
             }
             default -> throw new UnexpectedException("unexpected code");
         }
@@ -81,10 +81,12 @@ public class ClusterDao implements Dao<String> {
             throw new IOException(e);
         }
         switch (response.statusCode()) {
-            case Kvs.INCORRECT_KEY_CODE -> throw new IllegalArgumentException();
+            case ReplKvs.INCORRECT_KEY_CODE -> throw new IllegalArgumentException();
+            case ReplKvs.DELETED_CODE -> {
+            }
             case Kvs.DELETED_CODE -> {
             }
-            default -> throw new UnexpectedException("unexpected code");
+            default -> throw new UnexpectedException(String.format("unexpected code %d", response.statusCode()));
         }
     }
 
@@ -103,6 +105,6 @@ public class ClusterDao implements Dao<String> {
     }
 
     private String path(String key, int port) {
-        return String.format("http://localhost:%d%s?id=%s", port, Kvs.ENTITY, key);
+        return String.format("http://localhost:%d%s?id=%s", port, ReplKvs.ENTITY, key);
     }
 }
