@@ -57,8 +57,6 @@ public class ReplKvs implements KVService {
         }
     }
 
-    private static final String FILE = "/tmp/kv";
-
     public ReplKvs(int port) throws IOException {
         String file = String.format("/tmp/kv-%d", port);
         dao = new FileDao(Paths.get(file));

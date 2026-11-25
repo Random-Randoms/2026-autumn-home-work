@@ -4,14 +4,24 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.moderation.LinkCreatedEvent;
+import company.vk.edu.distrib.compute.moderation.ModerationResultEvent;
 import company.vk.edu.distrib.compute.randomrandoms.kv.RamDao;
+import company.vk.edu.distrib.compute.randomrandoms.moderation.ModUtils;
 import company.vk.edu.distrib.compute.randomrandoms.util.MethodConstants;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.io.IOException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.codeAndText;
 import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.justCode;
@@ -21,8 +31,12 @@ public class Shortener implements UrlShortenerService {
     private Dao<String> links;
     private final RamDao<String> auth = new RamDao<>();
     private final Random rand;
+    private String bs;
+    private KafkaProducer<String, String> producer;
+    private KafkaConsumer<String, String> consumer;
+    private final AtomicBoolean fin = new AtomicBoolean(true);
+    private Thread thd;
     int port;
-    boolean done;
 
     private final HttpHandler health = exc -> {
         if (!Objects.equals(exc.getRequestMethod(), "GET")) {
@@ -60,6 +74,7 @@ public class Shortener implements UrlShortenerService {
                 }
             }
             var shortLink = "http://localhost:%d/%s".formatted(port, newId);
+            postLce(newId, link);
             codeAndText(201, shortLink.getBytes(StandardCharsets.UTF_8)).handle(exc);
             exc.close();
         }
@@ -88,6 +103,7 @@ public class Shortener implements UrlShortenerService {
                 return;
             }
             links.upsert(id, newOrigin);
+            postLce(id, newOrigin);
             justCode(200).handle(exc);
             return;
         }
@@ -149,27 +165,92 @@ public class Shortener implements UrlShortenerService {
         rand = new Random();
         links = new RamDao<>();
         this.port = port;
-        done = false;
+    }
+
+    private void postLce(String id, String url) {
+        if (bs == null) {
+            return;
+        }
+        producer
+                .send(new ProducerRecord<>(
+                                ModUtils.TopicConstants.LINKS_CREATED,
+                                id,
+                                ModUtils.serializeLce(new LinkCreatedEvent(id, url, Instant.now()))
+                        ),
+                        (meta, e) -> {
+                        }
+                );
+    }
+
+    private void loop() {
+        consumer.subscribe(Collections.singleton(ModUtils.TopicConstants.LINKS_MODERATED));
+        while (!fin.get()) {
+            ConsumerRecords<String, String> crs;
+            crs = consumer.poll(Duration.ofSeconds(1));
+            for (var cr : crs) {
+                ModerationResultEvent mre;
+                try {
+                    mre = ModUtils.deserializeMre(cr.value()).orElseThrow();
+                } catch (NoSuchElementException e) {
+                    continue;
+                }
+                if (mre.passed()) {
+                    continue;
+                }
+                try {
+                    links.delete(mre.id());
+                } catch (IOException e) {
+                    throw new IllegalStateException("faylovaya sistema sdohla!", e);
+                }
+            }
+        }
+        consumer.close();
+        producer.close();
     }
 
     @Override
     public void start() {
+        if (bs != null) {
+            producer = ModUtils.getProducer(bs);
+            consumer = ModUtils.getConsumer(bs, "shortener");
+        }
         server.start();
-        done = true;
+        fin.set(false);
+        if (bs != null) {
+            thd = Thread.ofVirtual().start(this::loop);
+        }
     }
 
     @Override
     public void stop() {
+        if (fin.get()) {
+            throw new IllegalStateException("stopped already");
+        }
+        fin.set(true);
         server.stop(1);
-        done = true;
+        if (bs != null) {
+            try {
+                thd.join(Duration.ofSeconds(1));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     @Override
     public void setLinksDao(Dao<String> dao) {
-        if (done) {
+        if (!fin.get()) {
             throw new IllegalStateException();
         }
         links = dao;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (!fin.get()) {
+            throw new IllegalStateException("started already");
+        }
+        bs = bootstrapServers;
     }
 
     private String generateId() {

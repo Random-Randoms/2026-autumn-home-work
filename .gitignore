@@ -32,8 +32,3 @@ build/
 out/
 
 .vscode/
-
-src/main/java/company/vk/edu/distrib/compute/*
-!src/main/java/company/vk/edu/distrib/compute/kv
-!src/main/java/company/vk/edu/distrib/compute/urlshortener
-!src/main/java/company/vk/edu/distrib/compute/randomrandoms

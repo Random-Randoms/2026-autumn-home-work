@@ -1,7 +1,6 @@
 package company.vk.edu.distrib.compute.randomrandoms.factory;
 
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
-import company.vk.edu.distrib.compute.kv.KVServiceTest;
 import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 import company.vk.edu.distrib.compute.randomrandoms.kv.ReplKvs;
 
